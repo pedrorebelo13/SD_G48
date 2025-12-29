@@ -8,11 +8,11 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * Gestor de autenticação de utilizadores.
  * Thread-safe para acesso concorrente de múltiplos clientes.
  */
-public class AuthManager {
+public class ServerManager {
     private final Map<String, User> users;
     private final ReentrantReadWriteLock lock;
     
-    public AuthManager() {
+    public ServerManager() {
         this.users = new ConcurrentHashMap<>();
         this.lock = new ReentrantReadWriteLock();
     }

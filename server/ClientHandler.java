@@ -1,15 +1,14 @@
 package server;
 
 import geral.Protocol;
-import server.auth.AuthManager;
-import server.auth.User;
-import server.data.TimeSeriesManager;
-import server.aggregation.AggregationService;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
-import java.util.List;
+import server.aggregation.AggregationService;
+import server.auth.ServerManager;
+import server.auth.User;
+import server.data.TimeSeriesManager;
 
 /**
  * Handler para uma conexão de cliente.
@@ -17,17 +16,17 @@ import java.util.List;
  */
 public class ClientHandler implements Runnable {
     private final Socket socket;
-    private final AuthManager authManager;
+    private final ServerManager serverManager;
     private final TimeSeriesManager tsManager;
     private final AggregationService aggregationService;
     private DataInputStream in;
     private DataOutputStream out;
     private User authenticatedUser;
     
-    public ClientHandler(Socket socket, AuthManager authManager, 
+    public ClientHandler(Socket socket, ServerManager serverManager, 
                         TimeSeriesManager tsManager, AggregationService aggregationService) {
         this.socket = socket;
-        this.authManager = authManager;
+        this.serverManager = serverManager;
         this.tsManager = tsManager;
         this.aggregationService = aggregationService;
         this.authenticatedUser = null;
@@ -93,7 +92,7 @@ public class ClientHandler implements Runnable {
                 Protocol.STATUS_INVALID_PARAMS, "Username/password em falta");
         }
         
-        boolean success = authManager.register(username, password);
+        boolean success = serverManager.register(username, password);
         
         if (success) {
             return Protocol.Response.success(request.getRequestId());
@@ -112,7 +111,7 @@ public class ClientHandler implements Runnable {
                 Protocol.STATUS_INVALID_PARAMS, "Username/password em falta");
         }
         
-        User user = authManager.authenticate(username, password);
+        User user = serverManager.authenticate(username, password);
         
         if (user != null) {
             authenticatedUser = user;

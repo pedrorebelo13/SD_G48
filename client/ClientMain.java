@@ -6,7 +6,7 @@ import java.util.Scanner;
 /**
  * Interface de utilizador simples para testar o cliente.
  */
-public class ClientUI {
+public class ClientMain {
     private static final String DEFAULT_HOST = "localhost";
     private static final int DEFAULT_PORT = 12345;
     
@@ -14,7 +14,7 @@ public class ClientUI {
     private final Scanner scanner;
     private boolean running;
     
-    public ClientUI(String host, int port) {
+    public ClientMain(String host, int port) {
         this.client = new Client(host, port);
         this.scanner = new Scanner(System.in);
         this.running = false;
@@ -96,7 +96,6 @@ public class ClientUI {
                 break;
                 
             case "quit":
-            case "exit":
                 running = false;
                 System.out.println("A sair...");
                 break;
@@ -269,7 +268,7 @@ public class ClientUI {
             }
         }
         
-        ClientUI ui = new ClientUI(host, port);
+        ClientMain ui = new ClientMain(host, port);
         ui.start();
     }
 }

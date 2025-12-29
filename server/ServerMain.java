@@ -8,7 +8,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import server.aggregation.AggregationService;
-import server.auth.AuthManager;
+import server.auth.ServerManager;
 import server.cache.ProductCache;
 import server.data.TimeSeriesManager;
 import server.persistence.PersistenceManager;
@@ -23,7 +23,7 @@ public class ServerMain {
     private static final int DEFAULT_S = 100; // Séries em cache
     
     private final int port;
-    private final AuthManager authManager;
+    private final ServerManager serverManager;
     private TimeSeriesManager tsManager;
     private final ProductCache cache;
     private final AggregationService aggregationService;
@@ -36,12 +36,12 @@ public class ServerMain {
     public ServerMain(int port, int maxDays, int maxSeries) {
         this.port = port;
         this.maxDays = maxDays;
-        this.authManager = new AuthManager();
+        this.serverManager = new ServerManager();
         this.persistenceManager = new PersistenceManager();
         
         // Tentar carregar dados persistidos
         try {
-            this.tsManager = persistenceManager.loadAll(authManager, maxDays);
+            this.tsManager = persistenceManager.loadAll(serverManager, maxDays);
         } catch (IOException e) {
             System.err.println("Erro ao carregar dados: " + e.getMessage());
             System.err.println("Criando novo estado...");
@@ -90,7 +90,7 @@ public class ServerMain {
                 // Criar handler para o cliente
                 ClientHandler handler = new ClientHandler(
                     clientSocket,
-                    authManager,
+                    serverManager,
                     tsManager,
                     aggregationService
                 );
@@ -163,7 +163,7 @@ public class ServerMain {
         
         // Guardar automaticamente após mudança de dia
         try {
-            persistenceManager.saveAll(authManager, tsManager);
+            persistenceManager.saveAll(serverManager, tsManager);
         } catch (IOException e) {
             System.err.println("Erro ao guardar dados: " + e.getMessage());
         }
@@ -174,7 +174,7 @@ public class ServerMain {
      */
     private void saveData() {
         try {
-            persistenceManager.saveAll(authManager, tsManager);
+            persistenceManager.saveAll(serverManager, tsManager);
         } catch (IOException e) {
             System.err.println("Erro ao guardar dados: " + e.getMessage());
         }
@@ -185,7 +185,7 @@ public class ServerMain {
      */
     private void printStatistics() {
         System.out.println("\n=== Estatísticas do Servidor ===");
-        System.out.println("Utilizadores registados: " + authManager.getUserCount());
+        System.out.println("Utilizadores registados: " + serverManager.getUserCount());
         System.out.println("Dia corrente: " + tsManager.getCurrentDayId());
         System.out.println("Eventos hoje: " + tsManager.getCurrentDay().getEventCount());
         System.out.println("Dias históricos: " + tsManager.getHistoricalDayCount() + "/" + tsManager.getMaxDays());
@@ -217,7 +217,7 @@ public class ServerMain {
         
         // Guardar dados antes de encerrar
         try {
-            persistenceManager.saveAll(authManager, tsManager);
+            persistenceManager.saveAll(serverManager, tsManager);
         } catch (IOException e) {
             System.err.println("Erro ao guardar dados: " + e.getMessage());
         }

@@ -1,9 +1,9 @@
 package server.persistence;
 
-import server.auth.User;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import server.auth.User;
 
 /**
  * Persistência de utilizadores.

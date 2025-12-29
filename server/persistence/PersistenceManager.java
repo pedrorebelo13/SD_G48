@@ -1,11 +1,10 @@
 package server.persistence;
 
-import server.auth.AuthManager;
+import java.io.IOException;
+import java.util.List;
+import server.auth.ServerManager;
 import server.auth.User;
 import server.data.TimeSeriesManager;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Gestor centralizado de persistência.
@@ -32,15 +31,15 @@ public class PersistenceManager {
     
     /**
      * Guarda todos os dados do servidor.
-     * @param authManager Gestor de autenticação
+     * @param serverManager Gestor de autenticação
      * @param tsManager Gestor de séries temporais
      * @throws IOException se falhar a escrita
      */
-    public void saveAll(AuthManager authManager, TimeSeriesManager tsManager) throws IOException {
+    public void saveAll(ServerManager serverManager, TimeSeriesManager tsManager) throws IOException {
         System.out.println("A guardar dados...");
         
         // Guardar utilizadores
-        List<User> users = getAllUsers(authManager);
+        List<User> users = getAllUsers(serverManager);
         userPersistence.save(users);
         System.out.println("  - Utilizadores: " + users.size());
         
@@ -55,18 +54,18 @@ public class PersistenceManager {
     
     /**
      * Carrega todos os dados do servidor.
-     * @param authManager Gestor de autenticação (será preenchido)
+     * @param serverManager Gestor de autenticação (será preenchido)
      * @param maxDays Valor de D para criar TimeSeriesManager se necessário
      * @return TimeSeriesManager carregado ou novo se não existir
      * @throws IOException se falhar a leitura
      */
-    public TimeSeriesManager loadAll(AuthManager authManager, int maxDays) throws IOException {
+    public TimeSeriesManager loadAll(ServerManager serverManager, int maxDays) throws IOException {
         System.out.println("A carregar dados...");
         
         // Carregar utilizadores
         List<User> users = userPersistence.load();
         for (User user : users) {
-            authManager.register(user);
+            serverManager.register(user);
         }
         System.out.println("  - Utilizadores: " + users.size());
         
@@ -88,11 +87,11 @@ public class PersistenceManager {
     
     /**
      * Guarda apenas utilizadores.
-     * @param authManager Gestor de autenticação
+     * @param serverManager Gestor de autenticação
      * @throws IOException se falhar a escrita
      */
-    public void saveUsers(AuthManager authManager) throws IOException {
-        List<User> users = getAllUsers(authManager);
+    public void saveUsers(ServerManager serverManager) throws IOException {
+        List<User> users = getAllUsers(serverManager);
         userPersistence.save(users);
     }
     
@@ -106,15 +105,15 @@ public class PersistenceManager {
     }
     
     /**
-     * Obtém todos os utilizadores do AuthManager.
+     * Obtém todos os utilizadores do ServerManager.
      * Como não temos um método público para isso, usamos reflexão ou
-     * adicionamos um método no AuthManager.
+     * adicionamos um método no ServerManager.
      */
-    private List<User> getAllUsers(AuthManager authManager) {
-        // NOTA: Isto requer adicionar um método getAllUsers() no AuthManager
+    private List<User> getAllUsers(ServerManager serverManager) {
+        // NOTA: Isto requer adicionar um método getAllUsers() no ServerManager
         // Por agora, retornamos lista vazia se não tivermos acesso
         // Vou assumir que vamos adicionar esse método
-        return authManager.getAllUsers();
+        return serverManager.getAllUsers();
     }
     
     /**
