@@ -96,6 +96,20 @@ public class Connection implements AutoCloseable {
         return sendRequest(request);
     }
     
+    public Protocol.Response aggregateMaxPrice(String product, int days) throws IOException {
+        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_MAX_PRICE);
+        request.setParam("product", product);
+        request.setParam("days", days);
+        return sendRequest(request);
+    }
+    
+    public Protocol.Response filterEvents(java.util.List<String> products, int dayOffset) throws IOException { //envia pedido de filtrar eventos
+        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_FILTER_EVENTS);
+        request.setParam("products", products);
+        request.setParam("dayOffset", dayOffset);
+        return sendRequest(request);
+    }
+    
     @Override
     public void close() {
         if (!connected) {

@@ -151,6 +151,43 @@ public class TimeSeriesManager {
         }
     }
     
+    //Filtra eventos de produtos específicos num dia com offset.
+    //dayOffset: 0 = dia corrente, 1 = ontem, 2 = anteontem, etc.
+    public List<Protocol.Event> getFilteredEvents(List<String> products, int dayOffset) { //filtra eventos por produtos num dia especifico
+        lock.readLock().lock();
+        try {
+            List<Protocol.Event> result = new ArrayList<>();
+            
+            if (dayOffset < 0) {
+                return result; // Offset inválido
+            }
+            
+            List<Protocol.Event> dayEvents;
+            
+            if (dayOffset == 0) {
+                // Dia corrente
+                dayEvents = currentDay.events;
+            } else if (dayOffset <= historicalDays.size()) {
+                // Dia histórico (offset-1 porque lista começa em 0)
+                dayEvents = historicalDays.get(dayOffset - 1).events;
+            } else {
+                // Offset fora do range
+                return result;
+            }
+            
+            // Filtrar eventos pelos produtos especificados
+            for (Protocol.Event event : dayEvents) {
+                if (products.contains(event.getProduct())) {
+                    result.add(event);
+                }
+            }
+            
+            return result;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+    
     //Obtém o ID do dia corrente.
     public int getCurrentDayId() {
         lock.readLock().lock();

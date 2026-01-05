@@ -100,6 +100,29 @@ public class Client {
         return -1;
     }
     
+    public double aggregateMaxPrice(String product, int days) throws IOException {
+        ensureAuthenticated();
+        Protocol.Response response = connection.aggregateMaxPrice(product, days);
+        
+        if (response.isSuccess()) {
+            Double result = response.getDouble("maxPrice");
+            return result != null ? result : -1;
+        }
+        
+        return -1;
+    }
+    
+    public java.util.List<Protocol.Event> filterEvents(java.util.List<String> products, int dayOffset) throws IOException {
+        ensureAuthenticated();
+        Protocol.Response response = connection.filterEvents(products, dayOffset);
+        
+        if (response.isSuccess()) {
+            return response.getEventList("events");
+        }
+        
+        return new java.util.ArrayList<>();
+    }
+    
     public void close() {
         connection.close();
         authenticated = false;

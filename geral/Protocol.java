@@ -246,11 +246,11 @@ public class Protocol {
                     break;
                     
                 case OP_SALES_VOLUME:
-                    out.writeDouble(getDouble("volume"));
+                    out.writeDouble(getDouble("revenue"));
                     break;
                     
                 case OP_AVERAGE_PRICE:
-                    out.writeDouble(getDouble("averagePrice"));
+                    out.writeDouble(getDouble("avgPrice"));
                     break;
                     
                 case OP_MAX_PRICE:
@@ -297,11 +297,11 @@ public class Protocol {
                     break;
                     
                 case OP_SALES_VOLUME:
-                    res.data.put("volume", in.readDouble());
+                    res.data.put("revenue", in.readDouble());
                     break;
                     
                 case OP_AVERAGE_PRICE:
-                    res.data.put("averagePrice", in.readDouble());
+                    res.data.put("avgPrice", in.readDouble());
                     break;
                     
                 case OP_MAX_PRICE:

@@ -84,6 +84,14 @@ public class ClientMain {
                 handleAggregateAverage(parts);
                 break;
                 
+            case "max":
+                handleAggregateMax(parts);
+                break;
+                
+            case "filter":
+                handleFilterEvents(parts);
+                break;
+                
             case "status":
                 handleStatus();
                 break;
@@ -224,6 +232,66 @@ public class ClientMain {
         }
     }
     
+    private void handleAggregateMax(String[] parts) throws IOException {
+        if (parts.length < 3) {
+            System.out.println("Uso: max <produto> <dias>");
+            return;
+        }
+        
+        try {
+            String product = parts[1];
+            int days = Integer.parseInt(parts[2]);
+            
+            double result = client.aggregateMaxPrice(product, days);
+            if (result >= 0) {
+                System.out.printf("Preço máximo: %.2f\n", result);
+            } else {
+                System.out.println("Dados insuficientes ou erro");
+            }
+            
+        } catch (NumberFormatException e) {
+            System.out.println("Dias deve ser um número");
+        }
+    }
+    
+    private void handleFilterEvents(String[] parts) throws IOException {
+        if (parts.length < 3) {
+            System.out.println("Uso: filter <dayOffset> <produto1> [produto2] ...");
+            System.out.println("  dayOffset: 0=hoje, 1=ontem, 2=anteontem, etc.");
+            return;
+        }
+        
+        try {
+            int dayOffset = Integer.parseInt(parts[1]);
+            
+            // Coletar produtos (do índice 2 em diante)
+            java.util.List<String> products = new java.util.ArrayList<>();
+            for (int i = 2; i < parts.length; i++) {
+                products.add(parts[i]);
+            }
+            
+            java.util.List<geral.Protocol.Event> events = client.filterEvents(products, dayOffset);
+            
+            if (events.isEmpty()) {
+                System.out.println("Nenhum evento encontrado");
+            } else {
+                System.out.println("\n=== Eventos Encontrados ===");
+                for (geral.Protocol.Event event : events) {
+                    System.out.printf("%s: %d unidades a %.2f EUR = %.2f EUR\n",
+                        event.getProduct(), 
+                        event.getQuantity(), 
+                        event.getPrice(),
+                        event.getTotalValue());
+                }
+                System.out.println("Total de eventos: " + events.size());
+                System.out.println("==========================\n");
+            }
+            
+        } catch (NumberFormatException e) {
+            System.out.println("dayOffset deve ser um número");
+        }
+    }
+    
     private void handleStatus() {
         System.out.println("\n=== Estado do Cliente ===");
         System.out.println("Conectado: " + client.isConnected());
@@ -243,6 +311,8 @@ public class ClientMain {
         System.out.println("qty <prod> <days>          - Agregação quantidade");
         System.out.println("rev <prod> <days>          - Agregação receita");
         System.out.println("avg <prod> <days>          - Agregação preço médio");
+        System.out.println("max <prod> <days>          - Agregação preço máximo");
+        System.out.println("filter <offset> <prod>...  - Filtrar eventos por produto(s)");
         System.out.println("status                     - Ver estado");
         System.out.println("help                       - Mostrar ajuda");
         System.out.println("quit                       - Sair");

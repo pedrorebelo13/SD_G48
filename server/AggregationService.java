@@ -137,6 +137,49 @@ public class AggregationService {
         
         return avgPrice;
     }
+
+    //Agrega preço máximo de um produto nos últimos N dias.
+    public double aggregateMaxPrice(String product, int days) {
+        if (days < 1 || days > tsManager.getMaxDays()) {
+            return -1;
+        }
+        
+        String cacheKey = String.format("max:%s:%d", product, days);
+        int currentDayId = tsManager.getCurrentDayId();
+        
+        // Verificar cache
+        CachedAggregation cached = cache.get(cacheKey);
+        if (cached != null && cached.isValid(currentDayId)) {
+            return (Double) cached.getValue();
+        }
+        
+        // Calcular agregação
+        List<List<Event>> allDaysEvents = tsManager.getAllEvents(days);
+        if (allDaysEvents.size() < days) {
+            return -1;
+        }
+        
+        double maxPrice = Double.NEGATIVE_INFINITY;
+        boolean foundProduct = false;
+        
+        for (List<Event> dayEvents : allDaysEvents) {
+            for (Event event : dayEvents) {
+                if (event.getProduct().equals(product)) {
+                    maxPrice = Math.max(maxPrice, event.getPrice());
+                    foundProduct = true;
+                }
+            }
+        }
+        
+        if (!foundProduct) {
+            return 0;
+        }
+        
+        // Guardar no cache
+        cache.put(cacheKey, new CachedAggregation(maxPrice, currentDayId));
+        
+        return maxPrice;
+    }
     
     //Conta dias em que ambos os produtos foram vendidos (interseção).
     public int countCommonDays(String product1, String product2, int days) {

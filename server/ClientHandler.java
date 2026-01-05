@@ -5,6 +5,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.List;
 
 //Handler para uma conexão de cliente.
 //Processa pedidos e envia respostas usando o protocolo
@@ -67,6 +68,10 @@ public class ClientHandler implements Runnable {
                     return handleSalesVolume(request);
                 case Protocol.OP_AVERAGE_PRICE:
                     return handleAveragePrice(request);
+                case Protocol.OP_MAX_PRICE:
+                    return handleMaxPrice(request);
+                case Protocol.OP_FILTER_EVENTS:
+                    return handleFilterEvents(request); //processa pedido de filtrar eventos
                 default:
                     return Protocol.Response.error(request.getRequestId(), 
                         Protocol.STATUS_INVALID_PARAMS, "Operação desconhecida");
@@ -224,6 +229,56 @@ public class ClientHandler implements Runnable {
         
         return Protocol.Response.success(request.getRequestId())
             .setData("avgPrice", result);
+    }
+
+    private Protocol.Response handleMaxPrice(Protocol.Request request) {
+        if (authenticatedUser == null) {
+            return Protocol.Response.error(request.getRequestId(), 
+                Protocol.STATUS_NOT_AUTHENTICATED, "Não autenticado");
+        }
+        
+        String product = request.getString("product");
+        Integer days = request.getInt("days");
+        
+        if (product == null || days == null) {
+            return Protocol.Response.error(request.getRequestId(), 
+                Protocol.STATUS_INVALID_PARAMS, "Parâmetros inválidos");
+        }
+        
+        double result = aggregationService.aggregateMaxPrice(product, days);
+        
+        if (result == -1) {
+            return Protocol.Response.error(request.getRequestId(), 
+                Protocol.STATUS_ERROR, "Dados insuficientes");
+        }
+        
+        return Protocol.Response.success(request.getRequestId())
+            .setData("maxPrice", result);
+    }
+
+    private Protocol.Response handleFilterEvents(Protocol.Request request) {
+        if (authenticatedUser == null) {
+            return Protocol.Response.error(request.getRequestId(), 
+                Protocol.STATUS_NOT_AUTHENTICATED, "Não autenticado");
+        }
+        
+        List<String> products = request.getStringList("products");
+        Integer dayOffset = request.getInt("dayOffset");
+        
+        if (products == null || products.isEmpty() || dayOffset == null) {
+            return Protocol.Response.error(request.getRequestId(), 
+                Protocol.STATUS_INVALID_PARAMS, "Parâmetros inválidos");
+        }
+        
+        if (dayOffset < 0) {
+            return Protocol.Response.error(request.getRequestId(), 
+                Protocol.STATUS_INVALID_PARAMS, "Offset inválido");
+        }
+        
+        List<Protocol.Event> events = tsManager.getFilteredEvents(products, dayOffset);
+        
+        return Protocol.Response.success(request.getRequestId())
+            .setData("events", events);
     }
     
     private void cleanup() {
