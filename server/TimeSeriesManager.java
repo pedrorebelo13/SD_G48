@@ -325,4 +325,61 @@ public class TimeSeriesManager {
             }
         }
     }
+    
+    // Aguarda até n vendas consecutivas do mesmo produto no dia corrente ou o dia terminar
+    // Retorna o nome do produto se encontrado, null se o dia terminar
+    public String waitForConsecutiveSales(int n) throws InterruptedException {
+        if (n < 1) {
+            throw new IllegalArgumentException("n deve ser >= 1");
+        }
+        
+        int startDayId;
+        lock.readLock().lock();
+        try {
+            startDayId = currentDay.dayId;
+        } finally {
+            lock.readLock().unlock();
+        }
+        
+        while (true) {
+            synchronized (simultaneousLock) {
+                lock.readLock().lock();
+                try {
+                    // Se o dia mudou, retorna null
+                    if (currentDay.dayId != startDayId) return null;
+                    
+                    // Verifica se há n vendas consecutivas do mesmo produto
+                    String consecutiveProduct = findConsecutiveProduct(currentDay.events, n);
+                    if (consecutiveProduct != null) return consecutiveProduct;
+                    
+                    // Se o dia terminou e não encontrou, retorna null
+                    if (currentDay.completed) return null;
+                } finally {
+                    lock.readLock().unlock();
+                }
+                simultaneousLock.wait();
+            }
+        }
+    }
+    
+    // Método auxiliar para encontrar n vendas consecutivas do mesmo produto
+    private String findConsecutiveProduct(List<Protocol.Event> events, int n) {
+        if (events.size() < n) return null;
+        
+        for (int i = 0; i <= events.size() - n; i++) {
+            String product = events.get(i).getProduct();
+            boolean consecutive = true;
+            
+            for (int j = 1; j < n; j++) {
+                if (!events.get(i + j).getProduct().equals(product)) {
+                    consecutive = false;
+                    break;
+                }
+            }
+            
+            if (consecutive) return product;
+        }
+        
+        return null;
+    }
 }

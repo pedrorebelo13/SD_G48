@@ -71,6 +71,29 @@ private void handleSimultaneousSales(String[] parts) throws IOException {
                     }
                 }
 
+    private void handleConsecutiveSales(String[] parts) throws IOException {
+        if (parts.length < 2) {
+            System.out.println("Uso: consec <n>");
+            return;
+        }
+        try {
+            int n = Integer.parseInt(parts[1]);
+            if (n < 1) {
+                System.out.println("n deve ser >= 1");
+                return;
+            }
+            System.out.println("Aguardando " + n + " vendas consecutivas do mesmo produto no dia corrente...");
+            String product = client.consecutiveSales(n);
+            if (product != null) {
+                System.out.println("Produto com " + n + " vendas consecutivas: " + product);
+            } else {
+                System.out.println("O dia terminou sem " + n + " vendas consecutivas do mesmo produto.");
+            }
+        } catch (NumberFormatException e) {
+            System.out.println("n deve ser um número inteiro");
+        }
+    }
+
     private void processCommand(String line) throws IOException {
         String[] parts = line.split("\\s+");
         String command = parts[0].toLowerCase();
@@ -78,6 +101,9 @@ private void handleSimultaneousSales(String[] parts) throws IOException {
         switch (command) {
                         case "simul":
                             handleSimultaneousSales(parts);
+                            break;
+                        case "consec":
+                            handleConsecutiveSales(parts);
                             break;
                 
                 
@@ -325,6 +351,7 @@ private void handleSimultaneousSales(String[] parts) throws IOException {
         System.out.println("max <prod> <days>          - Agregação preço máximo");
         System.out.println("filter <days> <prod>...    - Filtrar eventos por produto(s)");
         System.out.println("simul <p1> <p2>            - Espera vendas simultâneas de dois produtos no dia corrente");
+        System.out.println("consec <n>                 - Espera n vendas consecutivas do mesmo produto no dia corrente");
         System.out.println("status                     - Ver estado");
         System.out.println("help                       - Mostrar ajuda");
         System.out.println("quit                       - Sair");

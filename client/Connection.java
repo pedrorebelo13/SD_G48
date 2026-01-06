@@ -117,6 +117,12 @@ public class Connection implements AutoCloseable {
         return sendRequest(request);
     }
     
+    public Protocol.Response consecutiveSales(int n) throws IOException {
+        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_CONSECUTIVE_SALES);
+        request.setParam("n", n);
+        return sendRequest(request);
+    }
+    
     @Override
     public void close() {
         if (!connected) {

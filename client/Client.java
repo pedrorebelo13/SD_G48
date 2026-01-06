@@ -142,6 +142,18 @@ public class Client {
         }
     }
     
+    public String consecutiveSales(int n) throws IOException {
+        ensureAuthenticated();
+        Protocol.Response response = connection.consecutiveSales(n);
+        if (response.isSuccess()) {
+            lastErrorMessage = null;
+            return response.getString("product");
+        } else {
+            lastErrorMessage = response.getErrorMessage();
+            return null;
+        }
+    }
+    
     public void close() {
         connection.close();
         authenticated = false;

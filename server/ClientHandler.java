@@ -74,6 +74,8 @@ public class ClientHandler implements Runnable {
                     return handleFilterEvents(request);
                 case Protocol.OP_SIMULTANEOUS_SALES:
                     return handleSimultaneousSales(request);
+                case Protocol.OP_CONSECUTIVE_SALES:
+                    return handleConsecutiveSales(request);
                 default:
                     return Protocol.Response.error(request.getRequestId(), 
                         Protocol.STATUS_INVALID_PARAMS, "Operação desconhecida");
@@ -294,6 +296,24 @@ public class ClientHandler implements Runnable {
         try {
             boolean result = tsManager.waitForSimultaneousSales(product1, product2);
             return Protocol.Response.success(request.getRequestId()).setData("result", result);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Protocol.Response.error(request.getRequestId(), Protocol.STATUS_ERROR, "Interrompido");
+        }
+    }
+    
+    // Handler para vendas consecutivas (bloqueante)
+    private Protocol.Response handleConsecutiveSales(Protocol.Request request) {
+        if (authenticatedUser == null) {
+            return Protocol.Response.error(request.getRequestId(), Protocol.STATUS_NOT_AUTHENTICATED, "Não autenticado");
+        }
+        Integer n = request.getInt("n");
+        if (n == null || n < 1) {
+            return Protocol.Response.error(request.getRequestId(), Protocol.STATUS_INVALID_PARAMS, "Parâmetro n inválido");
+        }
+        try {
+            String product = tsManager.waitForConsecutiveSales(n);
+            return Protocol.Response.success(request.getRequestId()).setData("product", product);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return Protocol.Response.error(request.getRequestId(), Protocol.STATUS_ERROR, "Interrompido");
