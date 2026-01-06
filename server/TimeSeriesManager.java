@@ -1,3 +1,4 @@
+
 package server;
 
 import geral.Protocol;
@@ -52,6 +53,9 @@ public class TimeSeriesManager {
                 throw new IllegalStateException("Dia já está completo");
             }
             currentDay.events.add(event);
+            synchronized (simultaneousLock) {
+                simultaneousLock.notifyAll();
+            }
         } finally {
             lock.readLock().unlock();
         }
@@ -75,19 +79,18 @@ public class TimeSeriesManager {
         try {
             // Completar o dia atual
             currentDay.completed = true;
-            
+            synchronized (simultaneousLock) {
+                simultaneousLock.notifyAll();
+            }
             // Adicionar ao histórico
             historicalDays.add(0, currentDay);
-            
             // Remover dias antigos se exceder o limite
             while (historicalDays.size() > maxDays) {
                 historicalDays.remove(historicalDays.size() - 1);
             }
-            
             // Criar novo dia
             currentDayId++;
             currentDay = new DayData(currentDayId);
-            
         } finally {
             lock.writeLock().unlock();
         }
@@ -284,6 +287,42 @@ public class TimeSeriesManager {
                 currentDayId, historicalDays.size(), maxDays, currentDay.events.size());
         } finally {
             lock.readLock().unlock();
+        }
+    }
+
+
+        // Notificação de vendas simultâneas
+    private final Object simultaneousLock = new Object();
+
+    // Aguarda até ambos os produtos serem vendidos no dia corrente ou o dia terminar
+    public boolean waitForSimultaneousSales(String p1, String p2) throws InterruptedException {
+        int startDayId;
+        lock.readLock().lock();
+        try {
+            startDayId = currentDay.dayId;
+        } finally {
+            lock.readLock().unlock();
+        }
+        
+        while (true) {
+            synchronized (simultaneousLock) {
+                lock.readLock().lock();
+                try {
+                    // Se o dia mudou, retorna false
+                    if (currentDay.dayId != startDayId) return false;
+                    
+                    boolean soldP1 = false, soldP2 = false;
+                    for (Protocol.Event e : currentDay.events) {
+                        if (e.getProduct().equals(p1)) soldP1 = true;
+                        if (e.getProduct().equals(p2)) soldP2 = true;
+                    }
+                    if (soldP1 && soldP2) return true;
+                    if (currentDay.completed) return false;
+                } finally {
+                    lock.readLock().unlock();
+                }
+                simultaneousLock.wait();
+            }
         }
     }
 }

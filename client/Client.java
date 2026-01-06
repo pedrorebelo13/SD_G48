@@ -130,6 +130,18 @@ public class Client {
         return new java.util.ArrayList<>();
     }
     
+    public Boolean simultaneousSales(String product1, String product2) throws IOException {
+        ensureAuthenticated();
+        Protocol.Response response = connection.simultaneousSales(product1, product2);
+        if (response.isSuccess()) {
+            lastErrorMessage = null;
+            return response.getBoolean("result");
+        } else {
+            lastErrorMessage = response.getErrorMessage();
+            return null;
+        }
+    }
+    
     public void close() {
         connection.close();
         authenticated = false;

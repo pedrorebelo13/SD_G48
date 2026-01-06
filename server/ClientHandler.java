@@ -71,7 +71,9 @@ public class ClientHandler implements Runnable {
                 case Protocol.OP_MAX_PRICE:
                     return handleMaxPrice(request);
                 case Protocol.OP_FILTER_EVENTS:
-                    return handleFilterEvents(request); //processa pedido de filtrar eventos
+                    return handleFilterEvents(request);
+                case Protocol.OP_SIMULTANEOUS_SALES:
+                    return handleSimultaneousSales(request);
                 default:
                     return Protocol.Response.error(request.getRequestId(), 
                         Protocol.STATUS_INVALID_PARAMS, "Operação desconhecida");
@@ -277,6 +279,25 @@ public class ClientHandler implements Runnable {
         
         return Protocol.Response.success(request.getRequestId())
             .setData("events", events);
+    }
+    
+    // Handler para vendas simultâneas (bloqueante)
+    private Protocol.Response handleSimultaneousSales(Protocol.Request request) {
+        if (authenticatedUser == null) {
+            return Protocol.Response.error(request.getRequestId(), Protocol.STATUS_NOT_AUTHENTICATED, "Não autenticado");
+        }
+        String product1 = request.getString("product1");
+        String product2 = request.getString("product2");
+        if (product1 == null || product2 == null) {
+            return Protocol.Response.error(request.getRequestId(), Protocol.STATUS_INVALID_PARAMS, "Parâmetros inválidos");
+        }
+        try {
+            boolean result = tsManager.waitForSimultaneousSales(product1, product2);
+            return Protocol.Response.success(request.getRequestId()).setData("result", result);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Protocol.Response.error(request.getRequestId(), Protocol.STATUS_ERROR, "Interrompido");
+        }
     }
     
     private void cleanup() {

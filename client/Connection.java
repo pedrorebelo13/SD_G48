@@ -1,4 +1,4 @@
-package client;
+    package client;
 
 import geral.Protocol;
 import java.io.DataInputStream;
@@ -107,6 +107,13 @@ public class Connection implements AutoCloseable {
         Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_FILTER_EVENTS);
         request.setParam("products", products);
         request.setParam("dayOffset", dayOffset);
+        return sendRequest(request);
+    }
+    
+    public Protocol.Response simultaneousSales(String product1, String product2) throws IOException {
+        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_SIMULTANEOUS_SALES);
+        request.setParam("product1", product1);
+        request.setParam("product2", product2);
         return sendRequest(request);
     }
     

@@ -51,11 +51,36 @@ public class ClientMain {
         scanner.close();
     }
     
+private void handleSimultaneousSales(String[] parts) throws IOException {
+                    if (parts.length < 3) {
+                        System.out.println("Uso: simul <produto1> <produto2>");
+                        return;
+                    }
+                    String p1 = parts[1];
+                    String p2 = parts[2];
+                    System.out.println("Aguardando vendas simultâneas de " + p1 + " e " + p2 + " no dia corrente...");
+                    Boolean result = client.simultaneousSales(p1, p2);
+                    if (result == null) {
+                        String lastError = client.getLastErrorMessage();
+                        if (lastError == null || lastError.isEmpty()) lastError = "Erro desconhecido";
+                        System.out.println("Erro: " + lastError);
+                    } else if (result) {
+                        System.out.println("Ambos os produtos foram vendidos no dia corrente!");
+                    } else {
+                        System.out.println("O dia terminou sem vendas simultâneas destes produtos.");
+                    }
+                }
+
     private void processCommand(String line) throws IOException {
         String[] parts = line.split("\\s+");
         String command = parts[0].toLowerCase();
         
         switch (command) {
+                        case "simul":
+                            handleSimultaneousSales(parts);
+                            break;
+                
+                
             case "register":
                 handleRegister(parts);
                 break;
@@ -98,6 +123,8 @@ public class ClientMain {
         }
     }
     
+        
+
     private void handleRegister(String[] parts) throws IOException {
         if (parts.length < 3) {
             System.out.println("Uso: register <username> <password>");
@@ -297,6 +324,7 @@ public class ClientMain {
         System.out.println("avg <prod> <days>          - Agregação preço médio");
         System.out.println("max <prod> <days>          - Agregação preço máximo");
         System.out.println("filter <days> <prod>...    - Filtrar eventos por produto(s)");
+        System.out.println("simul <p1> <p2>            - Espera vendas simultâneas de dois produtos no dia corrente");
         System.out.println("status                     - Ver estado");
         System.out.println("help                       - Mostrar ajuda");
         System.out.println("quit                       - Sair");
