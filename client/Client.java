@@ -2,17 +2,20 @@ package client;
 
 import geral.Protocol;
 import java.io.IOException;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Client {
     private final Connection connection;
     private boolean authenticated;
     private String currentUser;
     private String lastErrorMessage;
+    private final ReentrantReadWriteLock authLock;
     
     public Client(String host, int port) {
         this.connection = new Connection(host, port);
         this.authenticated = false;
         this.lastErrorMessage = null;
+        this.authLock = new ReentrantReadWriteLock();
     }
     
     public void connect() throws IOException {
@@ -24,11 +27,21 @@ public class Client {
     }
     
     public boolean isAuthenticated() {
-        return authenticated;
+        authLock.readLock().lock();
+        try {
+            return authenticated;
+        } finally {
+            authLock.readLock().unlock();
+        }
     }
     
     public String getCurrentUser() {
-        return currentUser;
+        authLock.readLock().lock();
+        try {
+            return currentUser;
+        } finally {
+            authLock.readLock().unlock();
+        }
     }
     
     public boolean register(String username, String password) throws IOException {
@@ -40,8 +53,13 @@ public class Client {
         Protocol.Response response = connection.login(username, password);
         
         if (response.isSuccess()) {
-            authenticated = true;
-            currentUser = username;
+            authLock.writeLock().lock();
+            try {
+                authenticated = true;
+                currentUser = username;
+            } finally {
+                authLock.writeLock().unlock();
+            }
             return true;
         }
         
@@ -52,8 +70,13 @@ public class Client {
         Protocol.Response response = connection.logout();
         
         if (response.isSuccess()) {
-            authenticated = false;
-            currentUser = null;
+            authLock.writeLock().lock();
+            try {
+                authenticated = false;
+                currentUser = null;
+            } finally {
+                authLock.writeLock().unlock();
+            }
             return true;
         }
         

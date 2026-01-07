@@ -1,27 +1,28 @@
-    package client;
+package client;
 
 import geral.Protocol;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
-import java.util.concurrent.atomic.AtomicInteger;
 
-
+/**
+ * Conexão que usa o Demultiplexer para permitir múltiplas threads
+ * submeterem pedidos concorrentemente.
+ */
 public class Connection implements AutoCloseable {
     private final String host;
     private final int port;
     private Socket socket;
-    private DataInputStream in;
-    private DataOutputStream out;
+    private Demultiplexer demux;
     private boolean connected;
-    private final AtomicInteger requestIdCounter;
     
     public Connection(String host, int port) {
         this.host = host;
         this.port = port;
         this.connected = false;
-        this.requestIdCounter = new AtomicInteger(1);
     }
     
     public void connect() throws IOException {
@@ -30,8 +31,7 @@ public class Connection implements AutoCloseable {
         }
         
         socket = new Socket(host, port);
-        in = new DataInputStream(socket.getInputStream());
-        out = new DataOutputStream(socket.getOutputStream());
+        demux = new Demultiplexer(socket);
         connected = true;
     }
     
@@ -39,36 +39,52 @@ public class Connection implements AutoCloseable {
         return connected && socket != null && !socket.isClosed();
     }
     
-    public Protocol.Response sendRequest(Protocol.Request request) throws IOException {
+    /**
+     * Envia um pedido e aguarda a response (thread-safe com Demultiplexer).
+     * Múltiplas threads podem chamar isto concorrentemente sem se bloquearem.
+     */
+    private Protocol.Response sendRequest(Protocol.Request request) throws IOException {
         if (!isConnected()) {
             throw new IllegalStateException("Não conectado");
         }
         
-        request.writeTo(out);
-        return Protocol.Response.readFrom(in, request.getOperation());
+        // Serializar request
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        DataOutputStream dos = new DataOutputStream(baos);
+        request.writeTo(dos);
+        dos.flush();
+        byte[] requestData = baos.toByteArray();
+        
+        // Enviar via Demultiplexer (thread-safe)
+        byte[] responseData = demux.send(requestData);
+        
+        // Desserializar response
+        ByteArrayInputStream bais = new ByteArrayInputStream(responseData);
+        DataInputStream dis = new DataInputStream(bais);
+        return Protocol.Response.readFrom(dis, request.getOperation());
     }
     
     public Protocol.Response register(String username, String password) throws IOException {
-        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_REGISTER);
+        Protocol.Request request = new Protocol.Request(0, Protocol.OP_REGISTER); // tag será gerado pelo Demultiplexer
         request.setParam("username", username);
         request.setParam("password", password);
         return sendRequest(request);
     }
     
     public Protocol.Response login(String username, String password) throws IOException {
-        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_LOGIN);
+        Protocol.Request request = new Protocol.Request(0, Protocol.OP_LOGIN);
         request.setParam("username", username);
         request.setParam("password", password);
         return sendRequest(request);
     }
     
     public Protocol.Response logout() throws IOException {
-        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_LOGOUT);
+        Protocol.Request request = new Protocol.Request(0, Protocol.OP_LOGOUT);
         return sendRequest(request);
     }
     
     public Protocol.Response addEvent(String product, int quantity, double price) throws IOException {
-        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_ADD_EVENT);
+        Protocol.Request request = new Protocol.Request(0, Protocol.OP_ADD_EVENT);
         request.setParam("product", product);
         request.setParam("quantity", quantity);
         request.setParam("price", price);
@@ -76,49 +92,49 @@ public class Connection implements AutoCloseable {
     }
     
     public Protocol.Response aggregateQuantity(String product, int days) throws IOException {
-        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_QUANTITY_SOLD);
+        Protocol.Request request = new Protocol.Request(0, Protocol.OP_QUANTITY_SOLD);
         request.setParam("product", product);
         request.setParam("days", days);
         return sendRequest(request);
     }
     
     public Protocol.Response aggregateVolume(String product, int days) throws IOException {
-        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_SALES_VOLUME);
+        Protocol.Request request = new Protocol.Request(0, Protocol.OP_SALES_VOLUME);
         request.setParam("product", product);
         request.setParam("days", days);
         return sendRequest(request);
     }
     
     public Protocol.Response aggregateAverage(String product, int days) throws IOException {
-        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_AVERAGE_PRICE);
+        Protocol.Request request = new Protocol.Request(0, Protocol.OP_AVERAGE_PRICE);
         request.setParam("product", product);
         request.setParam("days", days);
         return sendRequest(request);
     }
     
     public Protocol.Response aggregateMaxPrice(String product, int days) throws IOException {
-        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_MAX_PRICE);
+        Protocol.Request request = new Protocol.Request(0, Protocol.OP_MAX_PRICE);
         request.setParam("product", product);
         request.setParam("days", days);
         return sendRequest(request);
     }
     
-    public Protocol.Response filterEvents(java.util.List<String> products, int dayOffset) throws IOException { //envia pedido de filtrar eventos
-        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_FILTER_EVENTS);
+    public Protocol.Response filterEvents(java.util.List<String> products, int dayOffset) throws IOException {
+        Protocol.Request request = new Protocol.Request(0, Protocol.OP_FILTER_EVENTS);
         request.setParam("products", products);
         request.setParam("dayOffset", dayOffset);
         return sendRequest(request);
     }
     
     public Protocol.Response simultaneousSales(String product1, String product2) throws IOException {
-        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_SIMULTANEOUS_SALES);
+        Protocol.Request request = new Protocol.Request(0, Protocol.OP_SIMULTANEOUS_SALES);
         request.setParam("product1", product1);
         request.setParam("product2", product2);
         return sendRequest(request);
     }
     
     public Protocol.Response consecutiveSales(int n) throws IOException {
-        Protocol.Request request = new Protocol.Request(requestIdCounter.getAndIncrement(), Protocol.OP_CONSECUTIVE_SALES);
+        Protocol.Request request = new Protocol.Request(0, Protocol.OP_CONSECUTIVE_SALES);
         request.setParam("n", n);
         return sendRequest(request);
     }
@@ -130,8 +146,7 @@ public class Connection implements AutoCloseable {
         }
         
         try {
-            if (in != null) in.close();
-            if (out != null) out.close();
+            if (demux != null) demux.close();
             if (socket != null && !socket.isClosed()) socket.close();
         } catch (IOException e) {
             System.err.println("Erro ao fechar conexão: " + e.getMessage());

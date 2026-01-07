@@ -1,6 +1,8 @@
 package server;
 
 import geral.Protocol;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -8,22 +10,26 @@ import java.net.Socket;
 import java.util.List;
 
 //Handler para uma conexão de cliente.
-//Processa pedidos e envia respostas usando o protocolo
+//Processa pedidos e envia respostas usando o protocolo com Demultiplexer
+//Submete cada request como tarefa independente à ThreadPool para processamento concorrente
 public class ClientHandler implements Runnable {
     private final Socket socket;
     private final ServerManager serverManager;
     private final TimeSeriesManager tsManager;
     private final AggregationService aggregationService;
+    private final ThreadPool threadPool;
     private DataInputStream in;
     private DataOutputStream out;
     private User authenticatedUser;
     
     public ClientHandler(Socket socket, ServerManager serverManager, 
-                        TimeSeriesManager tsManager, AggregationService aggregationService) {
+                        TimeSeriesManager tsManager, AggregationService aggregationService,
+                        ThreadPool threadPool) {
         this.socket = socket;
         this.serverManager = serverManager;
         this.tsManager = tsManager;
         this.aggregationService = aggregationService;
+        this.threadPool = threadPool;
         this.authenticatedUser = null;
     }
     
@@ -35,11 +41,49 @@ public class ClientHandler implements Runnable {
             
             System.out.println("Cliente conectado: " + socket.getInetAddress());
             
-            // Loop de processamento
+            // Loop de leitura - submete cada request como tarefa independente à ThreadPool
             while (!socket.isClosed()) {
-                Protocol.Request request = Protocol.Request.readFrom(in);
-                Protocol.Response response = processRequest(request);
-                response.writeTo(out, request.getOperation());
+                // Ler tag (do Demultiplexer)
+                int tag = in.readInt();
+                
+                // Ler tamanho do request
+                int requestLen = in.readInt();
+                
+                // Ler dados do request
+                byte[] requestData = new byte[requestLen];
+                in.readFully(requestData);
+                
+                // Desserializar request
+                ByteArrayInputStream bais = new ByteArrayInputStream(requestData);
+                DataInputStream dis = new DataInputStream(bais);
+                Protocol.Request request = Protocol.Request.readFrom(dis);
+                
+                // Submeter tarefa à ThreadPool para processar este request
+                // Cada request é processado em paralelo - simul pode bloquear enquanto add executa
+                threadPool.execute(() -> {
+                    try {
+                        // Processar request
+                        Protocol.Response response = processRequest(request);
+                        
+                        // Serializar response
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        DataOutputStream dos = new DataOutputStream(baos);
+                        response.writeTo(dos, request.getOperation());
+                        dos.flush();
+                        byte[] responseData = baos.toByteArray();
+                        
+                        // Enviar response com Demultiplexer format (tag + len + data)
+                        // synchronized porque múltiplas threads podem escrever simultaneamente
+                        synchronized (out) {
+                            out.writeInt(tag);
+                            out.writeInt(responseData.length);
+                            out.write(responseData);
+                            out.flush();
+                        }
+                    } catch (IOException e) {
+                        System.err.println("Erro ao enviar resposta: " + e.getMessage());
+                    }
+                });
             }
             
         } catch (IOException e) {
@@ -293,13 +337,8 @@ public class ClientHandler implements Runnable {
         if (product1 == null || product2 == null) {
             return Protocol.Response.error(request.getRequestId(), Protocol.STATUS_INVALID_PARAMS, "Parâmetros inválidos");
         }
-        try {
-            boolean result = tsManager.waitForSimultaneousSales(product1, product2);
-            return Protocol.Response.success(request.getRequestId()).setData("result", result);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Protocol.Response.error(request.getRequestId(), Protocol.STATUS_ERROR, "Interrompido");
-        }
+        boolean result = tsManager.waitForSimultaneousSales(product1, product2);
+        return Protocol.Response.success(request.getRequestId()).setData("result", result);
     }
     
     // Handler para vendas consecutivas (bloqueante)
@@ -311,13 +350,8 @@ public class ClientHandler implements Runnable {
         if (n == null || n < 1) {
             return Protocol.Response.error(request.getRequestId(), Protocol.STATUS_INVALID_PARAMS, "Parâmetro n inválido");
         }
-        try {
-            String product = tsManager.waitForConsecutiveSales(n);
-            return Protocol.Response.success(request.getRequestId()).setData("product", product);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Protocol.Response.error(request.getRequestId(), Protocol.STATUS_ERROR, "Interrompido");
-        }
+        String product = tsManager.waitForConsecutiveSales(n);
+        return Protocol.Response.success(request.getRequestId()).setData("product", product);
     }
     
     private void cleanup() {

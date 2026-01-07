@@ -58,17 +58,27 @@ private void handleSimultaneousSales(String[] parts) throws IOException {
                     }
                     String p1 = parts[1];
                     String p2 = parts[2];
-                    System.out.println("Aguardando vendas simultâneas de " + p1 + " e " + p2 + " no dia corrente...");
-                    Boolean result = client.simultaneousSales(p1, p2);
-                    if (result == null) {
-                        String lastError = client.getLastErrorMessage();
-                        if (lastError == null || lastError.isEmpty()) lastError = "Erro desconhecido";
-                        System.out.println("Erro: " + lastError);
-                    } else if (result) {
-                        System.out.println("Ambos os produtos foram vendidos no dia corrente!");
-                    } else {
-                        System.out.println("O dia terminou sem vendas simultâneas destes produtos.");
-                    }
+                    
+                    // Executar em thread separada para não bloquear a UI
+                    new Thread(() -> {
+                        try {
+                            System.out.println("Aguardando vendas simultâneas de " + p1 + " e " + p2 + "...");
+                            Boolean result = client.simultaneousSales(p1, p2);
+                            if (result == null) {
+                                System.out.println("\n[NOTIFICAÇÃO] Erro ao aguardar vendas simultâneas");
+                            } else if (result) {
+                                System.out.println("\n[NOTIFICAÇÃO] Ambos os produtos " + p1 + " e " + p2 + " foram vendidos no dia corrente!");
+                            } else {
+                                System.out.println("\n[NOTIFICAÇÃO] O dia terminou sem vendas simultâneas de " + p1 + " e " + p2);
+                            }
+                            System.out.print("> "); // Re-imprimir prompt
+                        } catch (IOException e) {
+                            System.err.println("\n[ERRO] " + e.getMessage());
+                            System.out.print("> ");
+                        }
+                    }, "SimulThread").start();
+                    
+                    System.out.println("Pedido submetido em background. Pode continuar a usar outros comandos.");
                 }
 
     private void handleConsecutiveSales(String[] parts) throws IOException {
@@ -82,13 +92,25 @@ private void handleSimultaneousSales(String[] parts) throws IOException {
                 System.out.println("n deve ser >= 1");
                 return;
             }
-            System.out.println("Aguardando " + n + " vendas consecutivas do mesmo produto no dia corrente...");
-            String product = client.consecutiveSales(n);
-            if (product != null) {
-                System.out.println("Produto com " + n + " vendas consecutivas: " + product);
-            } else {
-                System.out.println("O dia terminou sem " + n + " vendas consecutivas do mesmo produto.");
-            }
+            
+            // Executar em thread separada para não bloquear a UI
+            new Thread(() -> {
+                try {
+                    System.out.println("Aguardando " + n + " vendas consecutivas...");
+                    String product = client.consecutiveSales(n);
+                    if (product != null) {
+                        System.out.println("\n[NOTIFICAÇÃO] Produto com " + n + " vendas consecutivas: " + product);
+                    } else {
+                        System.out.println("\n[NOTIFICAÇÃO] O dia terminou sem " + n + " vendas consecutivas do mesmo produto.");
+                    }
+                    System.out.print("> "); // Re-imprimir prompt
+                } catch (IOException e) {
+                    System.err.println("\n[ERRO] " + e.getMessage());
+                    System.out.print("> ");
+                }
+            }, "ConsecThread").start();
+            
+            System.out.println("Pedido submetido em background. Pode continuar a usar outros comandos.");
         } catch (NumberFormatException e) {
             System.out.println("n deve ser um número inteiro");
         }

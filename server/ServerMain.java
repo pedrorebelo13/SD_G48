@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Scanner;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import server.cache.ProductCache;
 import server.persistence.PersistenceManager;
@@ -21,7 +19,7 @@ public class ServerMain {
     private TimeSeriesManager tsManager;
     private final ProductCache cache;
     private final AggregationService aggregationService;
-    private final ExecutorService threadPool;
+    private final ThreadPool threadPool;
     private final AtomicBoolean running;
     private final PersistenceManager persistenceManager;
     private ServerSocket serverSocket;
@@ -42,7 +40,7 @@ public class ServerMain {
         
         this.cache = new ProductCache(maxSeries);
         this.aggregationService = new AggregationService(tsManager, cache);
-        this.threadPool = Executors.newCachedThreadPool();
+        this.threadPool = new ThreadPool(Math.max(4, Runtime.getRuntime().availableProcessors()));
         this.running = new AtomicBoolean(false);
     }
     
@@ -80,7 +78,8 @@ public class ServerMain {
                     clientSocket,
                     serverManager,
                     tsManager,
-                    aggregationService
+                    aggregationService,
+                    threadPool
                 );
                 
                 threadPool.execute(handler);
@@ -218,7 +217,7 @@ public class ServerMain {
             System.err.println("Erro ao fechar ServerSocket: " + e.getMessage());
         }
         
-        threadPool.shutdown();
+        threadPool.stop();
         System.out.println("Servidor encerrado");
     }
     

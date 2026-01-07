@@ -1,4 +1,3 @@
-
 package server;
 
 import geral.Protocol;
@@ -53,9 +52,6 @@ public class TimeSeriesManager {
                 throw new IllegalStateException("Dia já está completo");
             }
             currentDay.events.add(event);
-            synchronized (simultaneousLock) {
-                simultaneousLock.notifyAll();
-            }
         } finally {
             lock.readLock().unlock();
         }
@@ -79,18 +75,19 @@ public class TimeSeriesManager {
         try {
             // Completar o dia atual
             currentDay.completed = true;
-            synchronized (simultaneousLock) {
-                simultaneousLock.notifyAll();
-            }
+            
             // Adicionar ao histórico
             historicalDays.add(0, currentDay);
+            
             // Remover dias antigos se exceder o limite
             while (historicalDays.size() > maxDays) {
                 historicalDays.remove(historicalDays.size() - 1);
             }
+            
             // Criar novo dia
             currentDayId++;
             currentDay = new DayData(currentDayId);
+            
         } finally {
             lock.writeLock().unlock();
         }
@@ -146,43 +143,6 @@ public class TimeSeriesManager {
             
             for (int i = 0; i < count; i++) {
                 result.add(new ArrayList<>(historicalDays.get(i).events));
-            }
-            
-            return result;
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-    
-    //Filtra eventos de produtos específicos num dia com offset.
-    //dayOffset: 0 = dia corrente, 1 = ontem, 2 = anteontem, etc.
-    public List<Protocol.Event> getFilteredEvents(List<String> products, int dayOffset) { //filtra eventos por produtos num dia especifico
-        lock.readLock().lock();
-        try {
-            List<Protocol.Event> result = new ArrayList<>();
-            
-            if (dayOffset < 0) {
-                return result; // Offset inválido
-            }
-            
-            List<Protocol.Event> dayEvents;
-            
-            if (dayOffset == 0) {
-                // Dia corrente
-                dayEvents = currentDay.events;
-            } else if (dayOffset <= historicalDays.size()) {
-                // Dia histórico (offset-1 porque lista começa em 0)
-                dayEvents = historicalDays.get(dayOffset - 1).events;
-            } else {
-                // Offset fora do range
-                return result;
-            }
-            
-            // Filtrar eventos pelos produtos especificados
-            for (Protocol.Event event : dayEvents) {
-                if (products.contains(event.getProduct())) {
-                    result.add(event);
-                }
             }
             
             return result;
@@ -256,6 +216,123 @@ public class TimeSeriesManager {
         }
     }
     
+    //Obtém eventos filtrados por produtos e offset de dia.
+    public List<Protocol.Event> getFilteredEvents(List<String> products, Integer dayOffset) {
+        lock.readLock().lock();
+        try {
+            List<Protocol.Event> result = new ArrayList<>();
+            
+            // dayOffset null = dia corrente
+            if (dayOffset == null || dayOffset == 0) {
+                for (Protocol.Event event : currentDay.events) {
+                    if (products == null || products.isEmpty() || products.contains(event.getProduct())) {
+                        result.add(event);
+                    }
+                }
+            } else {
+                // Dia histórico
+                int index = dayOffset - 1;
+                if (index >= 0 && index < historicalDays.size()) {
+                    for (Protocol.Event event : historicalDays.get(index).events) {
+                        if (products == null || products.isEmpty() || products.contains(event.getProduct())) {
+                            result.add(event);
+                        }
+                    }
+                }
+            }
+            
+            return result;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+    
+    //Aguarda até que ambos os produtos sejam vendidos simultaneamente no dia corrente.
+    //Retorna true se a condição foi satisfeita, false se o dia terminou antes.
+    public boolean waitForSimultaneousSales(String product1, String product2) {
+        // Esta thread vai bloquear aqui até a condição ser satisfeita ou o dia acabar
+        while (true) {
+            lock.readLock().lock();
+            try {
+                // Verificar se o dia acabou
+                if (currentDay.completed) {
+                    return false;
+                }
+                
+                // Verificar se ambos os produtos foram vendidos
+                boolean hasProduct1 = false;
+                boolean hasProduct2 = false;
+                
+                for (Protocol.Event event : currentDay.events) {
+                    if (event.getProduct().equals(product1)) {
+                        hasProduct1 = true;
+                    }
+                    if (event.getProduct().equals(product2)) {
+                        hasProduct2 = true;
+                    }
+                    if (hasProduct1 && hasProduct2) {
+                        return true;
+                    }
+                }
+            } finally {
+                lock.readLock().unlock();
+            }
+            
+            // Esperar um pouco antes de verificar novamente
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+    }
+    
+    //Aguarda até que N vendas consecutivas ocorram no dia corrente.
+    //Retorna o produto com N vendas consecutivas, ou null se o dia terminou.
+    public String waitForConsecutiveSales(Integer n) {
+        while (true) {
+            lock.readLock().lock();
+            try {
+                // Verificar se o dia acabou
+                if (currentDay.completed) {
+                    return null;
+                }
+                
+                // Verificar vendas consecutivas
+                if (currentDay.events.size() >= n) {
+                    // Verificar os últimos N eventos
+                    String product = null;
+                    boolean allSame = true;
+                    
+                    for (int i = currentDay.events.size() - n; i < currentDay.events.size(); i++) {
+                        String eventProduct = currentDay.events.get(i).getProduct();
+                        if (product == null) {
+                            product = eventProduct;
+                        } else if (!product.equals(eventProduct)) {
+                            allSame = false;
+                            break;
+                        }
+                    }
+                    
+                    if (allSame && product != null) {
+                        return product;
+                    }
+                }
+            } finally {
+                lock.readLock().unlock();
+            }
+            
+            // Esperar um pouco antes de verificar novamente
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
+        }
+    }
+    
     //Verifica se o dia corrente está completo.
     public boolean isCurrentDayCompleted() {
         lock.readLock().lock();
@@ -288,98 +365,5 @@ public class TimeSeriesManager {
         } finally {
             lock.readLock().unlock();
         }
-    }
-
-
-        // Notificação de vendas simultâneas
-    private final Object simultaneousLock = new Object();
-
-    // Aguarda até ambos os produtos serem vendidos no dia corrente ou o dia terminar
-    public boolean waitForSimultaneousSales(String p1, String p2) throws InterruptedException {
-        int startDayId;
-        lock.readLock().lock();
-        try {
-            startDayId = currentDay.dayId;
-        } finally {
-            lock.readLock().unlock();
-        }
-        
-        while (true) {
-            synchronized (simultaneousLock) {
-                lock.readLock().lock();
-                try {
-                    // Se o dia mudou, retorna false
-                    if (currentDay.dayId != startDayId) return false;
-                    
-                    boolean soldP1 = false, soldP2 = false;
-                    for (Protocol.Event e : currentDay.events) {
-                        if (e.getProduct().equals(p1)) soldP1 = true;
-                        if (e.getProduct().equals(p2)) soldP2 = true;
-                    }
-                    if (soldP1 && soldP2) return true;
-                    if (currentDay.completed) return false;
-                } finally {
-                    lock.readLock().unlock();
-                }
-                simultaneousLock.wait();
-            }
-        }
-    }
-    
-    // Aguarda até n vendas consecutivas do mesmo produto no dia corrente ou o dia terminar
-    // Retorna o nome do produto se encontrado, null se o dia terminar
-    public String waitForConsecutiveSales(int n) throws InterruptedException {
-        if (n < 1) {
-            throw new IllegalArgumentException("n deve ser >= 1");
-        }
-        
-        int startDayId;
-        lock.readLock().lock();
-        try {
-            startDayId = currentDay.dayId;
-        } finally {
-            lock.readLock().unlock();
-        }
-        
-        while (true) {
-            synchronized (simultaneousLock) {
-                lock.readLock().lock();
-                try {
-                    // Se o dia mudou, retorna null
-                    if (currentDay.dayId != startDayId) return null;
-                    
-                    // Verifica se há n vendas consecutivas do mesmo produto
-                    String consecutiveProduct = findConsecutiveProduct(currentDay.events, n);
-                    if (consecutiveProduct != null) return consecutiveProduct;
-                    
-                    // Se o dia terminou e não encontrou, retorna null
-                    if (currentDay.completed) return null;
-                } finally {
-                    lock.readLock().unlock();
-                }
-                simultaneousLock.wait();
-            }
-        }
-    }
-    
-    // Método auxiliar para encontrar n vendas consecutivas do mesmo produto
-    private String findConsecutiveProduct(List<Protocol.Event> events, int n) {
-        if (events.size() < n) return null;
-        
-        for (int i = 0; i <= events.size() - n; i++) {
-            String product = events.get(i).getProduct();
-            boolean consecutive = true;
-            
-            for (int j = 1; j < n; j++) {
-                if (!events.get(i + j).getProduct().equals(product)) {
-                    consecutive = false;
-                    break;
-                }
-            }
-            
-            if (consecutive) return product;
-        }
-        
-        return null;
     }
 }
