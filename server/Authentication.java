@@ -87,16 +87,7 @@ public class Authentication {
         }
     }
 
-    // Remove um utilizador.
-    public boolean removeUser(String username) {
-        lock.writeLock().lock();
-        try {
-            return users.remove(username) != null;
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-    
+
     // Obtém todos os utilizadores (para persistência)
     public List<User> getAllUsers() {
         lock.readLock().lock();

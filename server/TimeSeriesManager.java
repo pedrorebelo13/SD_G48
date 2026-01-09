@@ -38,14 +38,6 @@ public class TimeSeriesManager {
             this.startTime = System.currentTimeMillis();
             this.completed = false;
         }
-        
-        // Construtor para carregar do disco (sem metadados de tempo)
-        DayData(int dayId, List<Protocol.Event> events) {
-            this.dayId = dayId;
-            this.events = events;
-            this.startTime = 0;
-            this.completed = true;
-        }
     }
     
     public TimeSeriesManager(int maxDays, int maxMemoryDays, TimeSeriesPersistence persistence) {
@@ -161,38 +153,6 @@ public class TimeSeriesManager {
     }
 
     
-    //Obtém todos os eventos dos últimos N dias.
-    public List<List<Protocol.Event>> getAllEvents(int days) {
-        lock.readLock().lock();
-        try {
-            List<List<Protocol.Event>> result = new ArrayList<>();
-            // Quantos dias temos disponíveis (max D)
-            int availableHistory = Math.min(currentDayId, maxDays);
-            int count = Math.min(days, availableHistory);
-            
-            for (int i = 0; i < count; i++) {
-                // i = 0 => Ontem (currentDayId - 1)
-                if (i < historicalDays.size()) {
-                    // Memória
-                    result.add(new ArrayList<>(historicalDays.get(i).events));
-                } else {
-                    // Disco
-                    int targetId = currentDayId - 1 - i;
-                    try {
-                        result.add(persistence.loadDay(targetId));
-                    } catch (IOException e) {
-                        System.err.println("Erro ao carregar dia " + targetId + ": " + e.getMessage());
-                        result.add(new ArrayList<>());
-                    }
-                }
-            }
-            
-            return result;
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-    
     //Obtém o ID do dia corrente.
     public int getCurrentDayId() {
         lock.readLock().lock();
@@ -228,11 +188,7 @@ public class TimeSeriesManager {
         }
     }
 
-    /**
-     * Obtém os eventos de UM dia histórico específico.
-     * @param daysAgo 0 = Ontem, 1 = Anteontem, etc.
-     * @return Lista de eventos do dia (pode vir da memória ou disco)
-     */
+    // Obtém os eventos de UM dia histórico específico.
     public List<Protocol.Event> getHistoricalDayEvents(int daysAgo) {
         lock.readLock().lock();
         try {
@@ -260,7 +216,7 @@ public class TimeSeriesManager {
         }
     }
     
-    //Obtém eventos filtrados por produtos e offset de dia.
+    //Obtém eventos filtrados por produtos e de dia.
     public List<Protocol.Event> getFilteredEvents(List<String> products, Integer dayOffset) {
         lock.readLock().lock();
         try {
